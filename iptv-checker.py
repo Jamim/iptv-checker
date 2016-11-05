@@ -77,7 +77,8 @@ def check_playlist(playlist_uri, stop_on_fail=False, verbose=False):
 def main(args):
 	if args.verbose:
 		import os
-		os.environ['AV_LOG_FORCE_COLOR'] = '1'
+		if os.getenv('ANSI_COLORS_DISABLED') is None:
+			os.putenv('AV_LOG_FORCE_COLOR', '1')
 	try:
 		if check_playlist(args.playlist_uri, args.stop_on_fail, args.verbose):
 			return 0
