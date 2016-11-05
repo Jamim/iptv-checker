@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
 
 import m3u8
+import os
 import re
 import traceback
 from ffmpy import FFprobe
 from urllib.error import HTTPError
 from subprocess import PIPE
 from sys import stdout
-from termcolor import colored
+from termcolor import colored, RESET
 
 
 __all__ = ['check_playlist', 'check_channel']
 
 
 ERASE_LINE = '\033[K'
+
+SKIP_FFPROBE_MESSAGES = [re.compile(pattern) for pattern in (
+	'Last message repeated',
+	'mmco: unref short failure',
+	'number of reference frames .+ exceeds max',
+)]
 
 
 def check_channel(channel, verbose=False):
@@ -38,13 +45,17 @@ def check_channel(channel, verbose=False):
 
 		segment_uri = channel_playlist.segments[-1].absolute_uri
 		ffprobe = FFprobe(inputs={segment_uri: '-v warning'})
-		errors = ffprobe.run(stderr=PIPE)[1].decode('utf-8')
+		errors = tuple(filter(
+			lambda line: not (line in ('', RESET) or any(regex.search(line) for regex in SKIP_FFPROBE_MESSAGES)),
+			ffprobe.run(stderr=PIPE)[1].decode('utf-8').split('\n')
+		))
 		if errors:
 			print_failed()
 			if verbose:
 				print(colored(channel_uri, 'green'))
 				print(colored(segment_uri, 'red'))
-				print(errors)
+				print('\n'.join(errors))
+				print('' if os.getenv('ANSI_COLORS_DISABLED') else RESET)
 			return False
 	except KeyboardInterrupt as interrupt:
 		raise interrupt
@@ -76,7 +87,6 @@ def check_playlist(playlist_uri, stop_on_fail=False, verbose=False):
 
 def main(args):
 	if args.verbose:
-		import os
 		if os.getenv('ANSI_COLORS_DISABLED') is None:
 			os.putenv('AV_LOG_FORCE_COLOR', '1')
 	try:
